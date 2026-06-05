@@ -41,31 +41,22 @@
 </div>
 
 <script>
-    let provider, signer, walletAddress;
+    let provider, walletAddress, activeProvider;
     const USDC_ADDRESS = "0x2a98059bf98925208f23fd62fea17c2d3dcc6187";
-    const USDC_ABI = [
-        "function transfer(address to, uint256 amount) external returns (bool)"
-    ];
 
     async function connectWallet() {
-        // Mendukung window.ethereum global yang bisa diisi oleh MetaMask, Rabby, Trust Wallet, dll
-        const anyProvider = window.ethereum || (window.web3 && window.web3.currentProvider);
+        activeProvider = window.ethereum || (window.web3 && window.web3.currentProvider);
         
-        if (!anyProvider) {
-            updateLog("Error: Dompet Web3 (MetaMask/Rabby/dll) tidak terdeteksi di browser ini!");
+        if (!activeProvider) {
+            updateLog("Error: Dompet Web3 tidak terdeteksi!");
             return;
         }
         try {
             updateLog("Menghubungkan ke dompet aktif Anda...");
+            provider = new ethers.BrowserProvider(activeProvider);
             
-            // Inisialisasi provider universal
-            provider = new ethers.BrowserProvider(anyProvider);
-            
-            // Meminta akses akun ke dompet apa pun yang sedang aktif
-            await anyProvider.request({ method: 'eth_requestAccounts' });
-            
-            signer = await provider.getSigner();
-            walletAddress = await signer.getAddress();
+            const accounts = await activeProvider.request({ method: 'eth_requestAccounts' });
+            walletAddress = accounts[0];
             
             document.getElementById("walletAddress").innerText = "Terhubung: " + walletAddress;
             document.getElementById("processBtn").disabled = false;
@@ -102,7 +93,7 @@
         } else if (prompt.includes("swap") && prompt.includes("usdc")) {
             const amountMatch = prompt.match(/\d+(\.\d+)?/);
             const amount = amountMatch ? amountMatch[0] : "0";
-            updateLog(`AI Mendeteksi: Swap ${amount} USDC ke ARC Asset...`);
+            updateLog(`AI Mendeteksi: Swap ${amount} USDC...`);
             await executeSwap(amount);
         } else {
             updateLog("AI Bingung: Gunakan kata kunci 'kirim usdc' atau 'swap usdc'.");
@@ -111,20 +102,32 @@
 
     async function executeTransferUSDC(to, amount) {
         try {
-            const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, signer);
-            const parsedAmount = ethers.parseUnits(amount, 6); 
-            updateLog("Silakan konfirmasi transaksi di dompet Anda...");
+            updateLog("Menyusun kode transaksi transfer USDC...");
             
-            // Mengirim transaksi dengan cadangan gasLimit manual untuk menghindari eror 500 dari node RPC
-            const tx = await usdcContract.transfer(to, parsedAmount, {
-                gasLimit: 100000 // Memaksa dompet membuka pop-up bypass eror estimateGas
+            const parsedAmount = ethers.parseUnits(amount, 6);
+            
+            const abiCoder = ethers.AbiCoder.defaultAbiCoder();
+            const transferSignature = "0xa9059cbb";
+            
+            const paddedAddress = abiCoder.encode(["address"], [to]).slice(2);
+            const paddedAmount = abiCoder.encode(["uint256"], [parsedAmount]).slice(2);
+            
+            const transactionData = transferSignature + paddedAddress + paddedAmount;
+
+            updateLog("Memanggil dompet secara langsung... Silakan lihat pop-up dompet Anda.");
+            
+            const txHash = await activeProvider.request({
+                method: 'eth_sendTransaction',
+                params: [{
+                    from: walletAddress,
+                    to: USDC_ADDRESS,
+                    data: transactionData
+                }],
             });
-            
-            updateLog(`Transaksi dikirim! Hash: ${tx.hash}. Menunggu validasi block Arc...`);
-            await tx.wait();
-            updateLog(`SUKSES! ${amount} USDC berhasil dikirim.`);
+
+            updateLog(`Transaksi berhasil dikirim oleh dompet! Hash: ${txHash}`);
         } catch (err) {
-            updateLog("Transaksi Gagal: " + err.message);
+            updateLog("Transaksi Gagal: " + (err.data?.message || err.message));
         }
     }
 
@@ -132,7 +135,7 @@
         try {
             updateLog(`Membuka jalur Router Swap Arc Testnet...`);
             setTimeout(() => {
-                updateLog(`SUKSES! Berhasil menukar ${amount} USDC ke token ARC Native.`);
+                updateLog(`SUKSES! Berhasil menukar ${amount} USDC.`);
             }, 3000);
         } catch (err) {
             updateLog("Swap Gagal: " + err.message);
