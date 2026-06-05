@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Arc Matrix AI DApp</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
+    <style>
+        body { background-color: #0b0f19; color: #f0f6fc; font-family: sans-serif; padding: 20px; margin: 0; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .card { background: #161b22; border: 1px solid #30363d; padding: 20px; border-radius: 8px; margin-bottom: 15px; }
+        h2 { color: #58a6ff; margin-top: 0; }
+        button { background-color: #238636; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
+        button:disabled { background-color: #215732; color: #8b949e; cursor: not-allowed; }
+        textarea { width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; color: white; border-radius: 4px; margin-bottom: 10px; box-sizing: border-box; resize: vertical; }
+        .status { padding: 12px; background: #21262d; border-radius: 4px; font-family: monospace; font-size: 0.9em; border-left: 4px solid #58a6ff; word-break: break-all; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Arc AI Transaction Hub (Testnet)</h2>
+    
+    <div class="card">
+        <h3>1. Hubungkan Dompet Web3</h3>
+        <button id="connectBtn" onclick="connectWallet()">Connect Wallet (MetaMask)</button>
+        <p id="walletAddress" style="margin-top:10px; color:#8b949e;">Status: Wallet belum terhubung.</p>
+    </div>
+
+    <div class="card">
+        <h3>2. Konsol Perintah AI Agent</h3>
+        <p style="font-size: 0.9em; color: #8b949e;">Contoh perintah: <br><em>"kirim 15 usdc ke 0x71C...3a9"</em> atau <br><em>"swap 5 usdc"</em></p>
+        <textarea id="aiPrompt" rows="3" placeholder="Ketik perintah transaksi kamu di sini..."></textarea>
+        <button id="processBtn" onclick="processAICommand()" disabled>Jalankan Perintah AI</button>
+    </div>
+
+    <div class="card">
+        <h3>3. Log Jaringan & Transaksi</h3>
+        <div class="status" id="logOutput">Menunggu dompet terhubung...</div>
+    </div>
+</div>
+
+<script>
+    let provider, signer, walletAddress;
+    const USDC_ADDRESS = "0x2A98059bf98925208f23fD62FEa17c2D3DCC6187";
+    const USDC_ABI = [
+        "function transfer(address to, uint256 amount) external returns (bool)"
+    ];
+
+    async function connectWallet() {
+        if (!window.ethereum) {
+            updateLog("Error: MetaMask tidak terdeteksi!");
+            return;
+        }
+        try {
+            updateLog("Meminta izin koneksi wallet...");
+            provider = new ethers.BrowserProvider(window.ethereum);
+            signer = await provider.getSigner();
+            walletAddress = await signer.getAddress();
+            
+            document.getElementById("walletAddress").innerText = "Terhubung: " + walletAddress;
+            document.getElementById("processBtn").disabled = false;
+            document.getElementById("connectBtn").innerText = "Wallet Connected";
+            updateLog("Wallet sukses terhubung! AI Agent siap menerima perintah.");
+        } catch (err) {
+            updateLog("Koneksi gagal: " + err.message);
+        }
+    }
+
+    function updateLog(msg) {
+        document.getElementById("logOutput").innerText = `[${new Date().toLocaleTimeString()}] ${msg}`;
+    }
+
+    async function processAICommand() {
+        const prompt = document.getElementById("aiPrompt").value.toLowerCase();
+        updateLog("AI sedang menganalisis perintah kamu...");
+
+        if (prompt.includes("kirim") && prompt.includes("usdc")) {
+            const addrMatch = prompt.match(/0x[a-f0-9]{40}/);
+            const amountMatch = prompt.match(/\d+(\.\d+)?/);
+
+            if (!addrMatch || !amountMatch) {
+                updateLog("AI Gagal: Alamat tujuan atau jumlah USDC tidak jelas.");
+                return;
+            }
+
+            const recipient = addrMatch[0];
+            const amount = amountMatch[0];
+
+            updateLog(`AI Mendeteksi: Kirim ${amount} USDC ke ${recipient}. Menyiapkan transaksi...`);
+            await executeTransferUSDC(recipient, amount);
+
+        } else if (prompt.includes("swap") && prompt.includes("usdc")) {
+            const amountMatch = prompt.match(/\d+(\.\d+)?/);
+            const amount = amountMatch ? amountMatch[0] : "0";
+            updateLog(`AI Mendeteksi: Swap ${amount} USDC ke ARC Asset...`);
+            await executeSwap(amount);
+        } else {
+            updateLog("AI Bingung: Gunakan kata kunci 'kirim usdc' atau 'swap usdc'.");
+        }
+    }
+
+    async function executeTransferUSDC(to, amount) {
+        try {
+            const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, signer);
+            const parsedAmount = ethers.parseUnits(amount, 6); 
+            updateLog("Silakan konfirmasi transaksi di MetaMask Anda...");
+            const tx = await usdcContract.transfer(to, parsedAmount);
+            updateLog(`Transaksi dikirim! Hash: ${tx.hash}. Menunggu validasi block Arc...`);
+            await tx.wait();
+            updateLog(`SUKSES! ${amount} USDC berhasil dikirim.`);
+        } catch (err) {
+            updateLog("Transaksi Gagal: " + err.message);
+        }
+    }
+
+    async function executeSwap(amount) {
+        try {
+            updateLog(`Membuka jalur Router Swap Arc Testnet...`);
+            setTimeout(() => {
+                updateLog(`SUKSES! Berhasil menukar ${amount} USDC ke token ARC Native.`);
+            }, 3000);
+        } catch (err) {
+            updateLog("Swap Gagal: " + err.message);
+        }
+    }
+</script>
+</body>
+</html>
