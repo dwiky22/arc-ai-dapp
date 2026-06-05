@@ -23,7 +23,7 @@
     
     <div class="card">
         <h3>1. Hubungkan Dompet Web3</h3>
-        <button id="connectBtn" onclick="connectWallet()">Connect Wallet (MetaMask)</button>
+        <button id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
         <p id="walletAddress" style="margin-top:10px; color:#8b949e;">Status: Wallet belum terhubung.</p>
     </div>
 
@@ -42,27 +42,35 @@
 
 <script>
     let provider, signer, walletAddress;
-    // SUDAH DIPERBAIKI: Menggunakan huruf kecil semua (lowercase) agar tidak bad address checksum
     const USDC_ADDRESS = "0x2a98059bf98925208f23fd62fea17c2d3dcc6187";
     const USDC_ABI = [
         "function transfer(address to, uint256 amount) external returns (bool)"
     ];
 
     async function connectWallet() {
-        if (!window.ethereum) {
-            updateLog("Error: MetaMask tidak terdeteksi!");
+        // Mendukung window.ethereum global yang bisa diisi oleh MetaMask, Rabby, Trust Wallet, dll
+        const anyProvider = window.ethereum || (window.web3 && window.web3.currentProvider);
+        
+        if (!anyProvider) {
+            updateLog("Error: Dompet Web3 (MetaMask/Rabby/dll) tidak terdeteksi di browser ini!");
             return;
         }
         try {
-            updateLog("Meminta izin koneksi wallet...");
-            provider = new ethers.BrowserProvider(window.ethereum);
+            updateLog("Menghubungkan ke dompet aktif Anda...");
+            
+            // Inisialisasi provider universal
+            provider = new ethers.BrowserProvider(anyProvider);
+            
+            // Meminta akses akun ke dompet apa pun yang sedang aktif
+            await anyProvider.request({ method: 'eth_requestAccounts' });
+            
             signer = await provider.getSigner();
             walletAddress = await signer.getAddress();
             
             document.getElementById("walletAddress").innerText = "Terhubung: " + walletAddress;
             document.getElementById("processBtn").disabled = false;
             document.getElementById("connectBtn").innerText = "Wallet Connected";
-            updateLog("Wallet sukses terhubung! AI Agent siap menerima perintah.");
+            updateLog("Dompet sukses terhubung! AI Agent siap menerima perintah.");
         } catch (err) {
             updateLog("Koneksi gagal: " + err.message);
         }
@@ -105,8 +113,13 @@
         try {
             const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, signer);
             const parsedAmount = ethers.parseUnits(amount, 6); 
-            updateLog("Silakan konfirmasi transaksi di MetaMask Anda...");
-            const tx = await usdcContract.transfer(to, parsedAmount);
+            updateLog("Silakan konfirmasi transaksi di dompet Anda...");
+            
+            // Mengirim transaksi dengan cadangan gasLimit manual untuk menghindari eror 500 dari node RPC
+            const tx = await usdcContract.transfer(to, parsedAmount, {
+                gasLimit: 100000 // Memaksa dompet membuka pop-up bypass eror estimateGas
+            });
+            
             updateLog(`Transaksi dikirim! Hash: ${tx.hash}. Menunggu validasi block Arc...`);
             await tx.wait();
             updateLog(`SUKSES! ${amount} USDC berhasil dikirim.`);
