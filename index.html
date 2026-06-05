@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Arc Matrix AI DApp</title>
+    <title>Arc AI Real DApp Hub</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js"></script>
     <style>
         body { background-color: #0b0f19; color: #f0f6fc; font-family: sans-serif; padding: 20px; margin: 0; }
@@ -16,15 +16,17 @@
         .btn-wallet { background-color: #21262d; border: 1px solid #30363d; color: white; text-align: left; padding: 12px; display: flex; align-items: center; justify-content: space-between; }
         .btn-wallet:hover { background-color: #30363d; }
         textarea { width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; color: white; border-radius: 4px; margin-bottom: 10px; box-sizing: border-box; resize: vertical; }
+        input { width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; color: #58a6ff; border-radius: 4px; margin-bottom: 15px; box-sizing: border-box; font-family: monospace; }
         .status { padding: 12px; background: #21262d; border-radius: 4px; font-family: monospace; font-size: 0.9em; border-left: 4px solid #58a6ff; word-break: break-all; }
         .wallet-options { display: none; margin-top: 10px; }
         .wallet-options.show { display: block; }
+        label { font-size: 0.85em; color: #8b949e; display: block; margin-bottom: 5px; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Arc AI Transaction Hub (Testnet)</h2>
+    <h2>Arc AI Real Transaction Hub</h2>
     
     <div class="card">
         <h3>1. Manajemen Dompet Web3</h3>
@@ -41,14 +43,21 @@
     </div>
 
     <div class="card">
-        <h3>2. Konsol Perintah AI Agent</h3>
-        <p style="font-size: 0.9em; color: #8b949e;">Contoh perintah: <br><em>"kirim 15 usdc ke 0x71C...3a9"</em> atau <br><em>"swap 5 usdc"</em></p>
-        <textarea id="aiPrompt" rows="3" placeholder="Ketik perintah transaksi kamu di sini..."></textarea>
-        <button id="processBtn" onclick="processAICommand()" disabled>Jalankan Perintah AI</button>
+        <h3>2. Konfigurasi Kontrak Token</h3>
+        <label for="tokenAddressInput">Alamat Kontrak USDC Testnet Arc:</label>
+        <input type="text" id="tokenAddressInput" value="0x2a98059bf98925208f23fd62fea17c2d3dcc6187">
+        <p style="font-size: 0.8em; color: #8b949e; margin: 0;">*Pastikan alamat ini adalah alamat token USDC Arc Testnet yang tertera di saldo dompet Rabby Anda.</p>
     </div>
 
     <div class="card">
-        <h3>3. Log Jaringan & Transaksi</h3>
+        <h3>3. Konsol Perintah AI Agent</h3>
+        <p style="font-size: 0.9em; color: #8b949e;">Contoh perintah: <br><em>"kirim 15 usdc ke 0x71C...3a9"</em></p>
+        <textarea id="aiPrompt" rows="3" placeholder="Ketik perintah transaksi kamu di sini..."></textarea>
+        <button id="processBtn" onclick="processAICommand()" disabled>Jalankan Perintah AI Real-Time</button>
+    </div>
+
+    <div class="card">
+        <h3>4. Log Eksekusi Jaringan</h3>
         <div class="status" id="logOutput">Menunggu dompet terhubung...</div>
     </div>
 </div>
@@ -59,9 +68,10 @@
     let ethersProvider = null;
     let ethersSigner = null;
     
-    const USDC_ADDRESS = "0x2a98059bf98925208f23fd62fea17c2d3dcc6187";
-    const USDC_ABI = [
-        "function transfer(address to, uint256 amount) external returns (bool)"
+    // ABI standar ERC20 yang valid agar Ethers bisa melakukan parsing otomatis
+    const ERC20_ABI = [
+        "function transfer(address to, uint256 value) external returns (bool)",
+        "function decimals() external view returns (uint8)"
     ];
 
     function toggleWalletOptions() {
@@ -87,7 +97,7 @@
         }
 
         if (!providerInstance) {
-            updateLog(`Error: Dompet pilihan Anda (${walletType}) tidak terdeteksi aktif di browser ini!`);
+            updateLog(`Error: Dompet (${walletType}) tidak ditemukan.`);
             return;
         }
 
@@ -97,9 +107,7 @@
 
     async function connectWallet() {
         try {
-            updateLog("Meminta konfirmasi akses dari dompet pilihan Anda...");
-            
-            // Inisialisasi Ethers BrowserProvider dengan benar agar sinkron dengan dompet aktif
+            updateLog("Menghubungkan dompet...");
             ethersProvider = new ethers.BrowserProvider(activeProvider);
             
             const accounts = await activeProvider.request({ method: 'eth_requestAccounts' });
@@ -114,7 +122,7 @@
             mainBtn.innerText = "Disconnect Wallet";
             mainBtn.className = "btn-danger";
             
-            updateLog("Dompet sukses terhubung! AI Agent siap menerima perintah transaksi.");
+            updateLog("Dompet terhubung dengan sukses!");
         } catch (err) {
             updateLog("Koneksi gagal: " + err.message);
         }
@@ -133,7 +141,7 @@
         mainBtn.innerText = "Pilih & Hubungkan Dompet";
         mainBtn.className = "";
         
-        updateLog("Dompet berhasil diputuskan dari dApp.");
+        updateLog("Dompet terputus.");
     }
 
     function updateLog(msg) {
@@ -142,64 +150,60 @@
 
     async function processAICommand() {
         const prompt = document.getElementById("aiPrompt").value.toLowerCase();
-        updateLog("AI sedang menganalisis perintah kamu...");
+        updateLog("AI sedang menganalisis perintah...");
 
         if (prompt.includes("kirim") && prompt.includes("usdc")) {
             const addrMatch = prompt.match(/0x[a-f0-9]{40}/);
             const amountMatch = prompt.match(/\d+(\.\d+)?/);
 
             if (!addrMatch || !amountMatch) {
-                updateLog("AI Gagal: Alamat tujuan atau jumlah USDC tidak jelas.");
+                updateLog("AI Gagal: Alamat atau jumlah token tidak jelas.");
                 return;
             }
 
             const recipient = addrMatch[0];
             const amount = amountMatch[0];
 
-            updateLog(`AI Mendeteksi: Kirim ${amount} USDC ke ${recipient}. Menyiapkan transaksi...`);
+            updateLog(`AI Memproses: Kirim ${amount} USDC ke ${recipient}`);
             await executeTransferUSDC(recipient, amount);
-
-        } else if (prompt.includes("swap") && prompt.includes("usdc")) {
-            const amountMatch = prompt.match(/\d+(\.\d+)?/);
-            const amount = amountMatch ? amountMatch[0] : "0";
-            updateLog(`AI Mendeteksi: Swap ${amount} USDC...`);
-            await executeSwap(amount);
         } else {
-            updateLog("AI Bingung: Gunakan kata kunci 'kirim usdc' atau 'swap usdc'.");
+            updateLog("Gunakan kata kunci perintah: 'kirim [jumlah] usdc ke [alamat_tujuan]'");
         }
     }
 
     async function executeTransferUSDC(to, amount) {
         try {
-            updateLog("Membangun struktur data kontrak USDC resmi...");
-            const parsedAmount = ethers.parseUnits(amount, 6);
+            const tokenAddress = document.getElementById("tokenAddressInput").value.trim();
+            updateLog("Menginisialisasi kontrak token...");
             
-            // Memakai objek kontrak resmi agar terbaca jelas oleh ekstensi dompet
-            const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, ethersSigner);
+            // Menggunakan instance Contract bawaan Ethers.js agar parsing data ke wallet valid sempurna
+            const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, ethersSigner);
             
-            updateLog("Memanggil dompet... Silakan buka jendela konfirmasi dompet Anda.");
-            
-            // Mengeksekusi fungsi dengan mematok harga gas manual agar anti-eror 500
-            const tx = await usdcContract.transfer(to, parsedAmount, {
-                gasLimit: 80000 // Mengunci gas limit agar bypass kegagalan estimateGas di Rabby
-            });
+            let decimals = 6;
+            try {
+                decimals = await tokenContract.decimals();
+            } catch (e) {
+                updateLog("Gagal mendeteksi desimal otomatis, menggunakan default (6 desimal)...");
+            }
 
-            updateLog(`Transaksi berhasil dipicu! Hash: ${tx.hash}. Menunggu konfirmasi block...`);
-            await tx.wait();
-            updateLog(`SUKSES! ${amount} USDC berhasil dikirim.`);
-        } catch (err) {
-            updateLog("Transaksi Gagal: " + (err.data?.message || err.message));
-        }
-    }
+            const parsedAmount = ethers.parseUnits(amount, decimals);
+            
+            updateLog("Membuka jendela konfirmasi dompet...");
+            
+            // Memanggil fungsi transfer langsung dari contract instance Ethers
+            const tx = await tokenContract.transfer(to, parsedAmount);
 
-    async function executeSwap(amount) {
-        try {
-            updateLog(`Membuka jalur Router Swap Arc Testnet...`);
-            setTimeout(() => {
-                updateLog(`SUKSES! Berhasil menukar ${amount} USDC.`);
-            }, 3000);
+            updateLog(`Transaksi Terkirim! Hash: ${tx.hash}`);
+            updateLog("Menunggu konfirmasi block dari jaringan Arc...");
+            
+            const receipt = await tx.wait();
+            if (receipt.status === 1) {
+                updateLog(`SUKSES NYATA! ${amount} USDC berhasil dikirim. Hash: ${tx.hash}`);
+            } else {
+                updateLog("Transaksi gagal dieksekusi di blockchain (reverted).");
+            }
         } catch (err) {
-            updateLog("Swap Gagal: " + err.message);
+            updateLog("Eror Eksekusi: " + (err.data?.message || err.message));
         }
     }
 </script>
