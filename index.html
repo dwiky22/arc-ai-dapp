@@ -42,7 +42,8 @@
 
 <script>
     let provider, signer, walletAddress;
-    const USDC_ADDRESS = "0x2A98059bf98925208f23fD62FEa17c2D3DCC6187";
+    // SUDAH DIPERBAIKI: Menggunakan huruf kecil semua (lowercase) agar tidak bad address checksum
+    const USDC_ADDRESS = "0x2a98059bf98925208f23fd62fea17c2d3dcc6187";
     const USDC_ABI = [
         "function transfer(address to, uint256 amount) external returns (bool)"
     ];
