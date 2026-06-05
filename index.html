@@ -46,7 +46,6 @@
         <h3>2. Konfigurasi Kontrak Token</h3>
         <label for="tokenAddressInput">Alamat Kontrak USDC Testnet Arc:</label>
         <input type="text" id="tokenAddressInput" value="0x2a98059bf98925208f23fd62fea17c2d3dcc6187">
-        <p style="font-size: 0.8em; color: #8b949e; margin: 0;">*Pastikan alamat ini adalah alamat token USDC Arc Testnet yang tertera di saldo dompet Rabby Anda.</p>
     </div>
 
     <div class="card">
@@ -68,7 +67,6 @@
     let ethersProvider = null;
     let ethersSigner = null;
     
-    // ABI standar ERC20 yang valid agar Ethers bisa melakukan parsing otomatis
     const ERC20_ABI = [
         "function transfer(address to, uint256 value) external returns (bool)",
         "function decimals() external view returns (uint8)"
@@ -173,34 +171,32 @@
 
     async function executeTransferUSDC(to, amount) {
         try {
-            const tokenAddress = document.getElementById("tokenAddressInput").value.trim();
-            updateLog("Menginisialisasi kontrak token...");
+            const tokenAddress = document.getElementById("tokenAddressInput").value.trim().toLowerCase();
+            updateLog("Menginisialisasi kontrak token riil...");
             
-            // Menggunakan instance Contract bawaan Ethers.js agar parsing data ke wallet valid sempurna
             const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, ethersSigner);
             
             let decimals = 6;
             try {
                 decimals = await tokenContract.decimals();
             } catch (e) {
-                updateLog("Gagal mendeteksi desimal otomatis, menggunakan default (6 desimal)...");
+                updateLog("Gagal membaca desimal otomatis, menggunakan default (6 desimal)...");
             }
 
             const parsedAmount = ethers.parseUnits(amount, decimals);
             
             updateLog("Membuka jendela konfirmasi dompet...");
             
-            // Memanggil fungsi transfer langsung dari contract instance Ethers
             const tx = await tokenContract.transfer(to, parsedAmount);
 
-            updateLog(`Transaksi Terkirim! Hash: ${tx.hash}`);
+            updateLog(`Transaksi Berhasil Dikirim ke Node! Hash: ${tx.hash}`);
             updateLog("Menunggu konfirmasi block dari jaringan Arc...");
             
             const receipt = await tx.wait();
             if (receipt.status === 1) {
-                updateLog(`SUKSES NYATA! ${amount} USDC berhasil dikirim. Hash: ${tx.hash}`);
+                updateLog(`SUKSES TOTAL! ${amount} USDC dikirim. Jaringan Arc mencatat transaksi Anda.`);
             } else {
-                updateLog("Transaksi gagal dieksekusi di blockchain (reverted).");
+                updateLog("Transaksi gagal tereksekusi di blockchain.");
             }
         } catch (err) {
             updateLog("Eror Eksekusi: " + (err.data?.message || err.message));
