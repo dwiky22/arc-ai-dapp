@@ -56,7 +56,13 @@
 <script>
     let walletAddress = null;
     let activeProvider = null;
+    let ethersProvider = null;
+    let ethersSigner = null;
+    
     const USDC_ADDRESS = "0x2a98059bf98925208f23fd62fea17c2d3dcc6187";
+    const USDC_ABI = [
+        "function transfer(address to, uint256 amount) external returns (bool)"
+    ];
 
     function toggleWalletOptions() {
         if (walletAddress) {
@@ -92,8 +98,14 @@
     async function connectWallet() {
         try {
             updateLog("Meminta konfirmasi akses dari dompet pilihan Anda...");
+            
+            // Inisialisasi Ethers BrowserProvider dengan benar agar sinkron dengan dompet aktif
+            ethersProvider = new ethers.BrowserProvider(activeProvider);
+            
             const accounts = await activeProvider.request({ method: 'eth_requestAccounts' });
             walletAddress = accounts[0];
+            
+            ethersSigner = await ethersProvider.getSigner();
             
             document.getElementById("walletAddress").innerText = "Terhubung: " + walletAddress;
             document.getElementById("processBtn").disabled = false;
@@ -111,6 +123,8 @@
     function disconnectWallet() {
         walletAddress = null;
         activeProvider = null;
+        ethersProvider = null;
+        ethersSigner = null;
         
         document.getElementById("walletAddress").innerText = "Status: Wallet terputus.";
         document.getElementById("processBtn").disabled = true;
@@ -157,31 +171,22 @@
 
     async function executeTransferUSDC(to, amount) {
         try {
-            updateLog("Menyusun kode enkripsi pengiriman data...");
+            updateLog("Membangun struktur data kontrak USDC resmi...");
             const parsedAmount = ethers.parseUnits(amount, 6);
             
-            const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-            const transferSignature = "0xa9059cbb"; 
-            const paddedAddress = abiCoder.encode(["address"], [to]).slice(2);
-            const paddedAmount = abiCoder.encode(["uint256"], [parsedAmount]).slice(2);
-            const transactionData = transferSignature + paddedAddress + paddedAmount;
-
-            // Mengambil chainId aktif saat ini untuk disematkan dalam transaksi mentah (Solusi anti-eror 500)
-            const currentChainId = await activeProvider.request({ method: 'eth_chainId' });
-
-            updateLog("Memanggil dompet secara langsung... Silakan buka jendela konfirmasi dompet.");
+            // Memakai objek kontrak resmi agar terbaca jelas oleh ekstensi dompet
+            const usdcContract = new ethers.Contract(USDC_ADDRESS, USDC_ABI, ethersSigner);
             
-            const txHash = await activeProvider.request({
-                method: 'eth_sendTransaction',
-                params: [{
-                    from: walletAddress,
-                    to: USDC_ADDRESS,
-                    data: transactionData,
-                    chainId: currentChainId // Ditambahkan secara eksplisit agar Rabby mengenali jaringan target tanpa crash
-                }],
+            updateLog("Memanggil dompet... Silakan buka jendela konfirmasi dompet Anda.");
+            
+            // Mengeksekusi fungsi dengan mematok harga gas manual agar anti-eror 500
+            const tx = await usdcContract.transfer(to, parsedAmount, {
+                gasLimit: 80000 // Mengunci gas limit agar bypass kegagalan estimateGas di Rabby
             });
 
-            updateLog(`Transaksi sukses dikirim! Hash: ${txHash}`);
+            updateLog(`Transaksi berhasil dipicu! Hash: ${tx.hash}. Menunggu konfirmasi block...`);
+            await tx.wait();
+            updateLog(`SUKSES! ${amount} USDC berhasil dikirim.`);
         } catch (err) {
             updateLog("Transaksi Gagal: " + (err.data?.message || err.message));
         }
