@@ -10,10 +10,15 @@
         .container { max-width: 600px; margin: 0 auto; }
         .card { background: #161b22; border: 1px solid #30363d; padding: 20px; border-radius: 8px; margin-bottom: 15px; }
         h2 { color: #58a6ff; margin-top: 0; }
-        button { background-color: #238636; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; }
+        button { background-color: #238636; color: white; border: none; padding: 12px 20px; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; margin-bottom: 10px; }
         button:disabled { background-color: #215732; color: #8b949e; cursor: not-allowed; }
+        .btn-danger { background-color: #da3637; }
+        .btn-wallet { background-color: #21262d; border: 1px solid #30363d; color: white; text-align: left; padding: 12px; display: flex; align-items: center; justify-content: space-between; }
+        .btn-wallet:hover { background-color: #30363d; }
         textarea { width: 100%; padding: 10px; background: #0d1117; border: 1px solid #30363d; color: white; border-radius: 4px; margin-bottom: 10px; box-sizing: border-box; resize: vertical; }
         .status { padding: 12px; background: #21262d; border-radius: 4px; font-family: monospace; font-size: 0.9em; border-left: 4px solid #58a6ff; word-break: break-all; }
+        .wallet-options { display: none; margin-top: 10px; }
+        .wallet-options.show { display: block; }
     </style>
 </head>
 <body>
@@ -22,8 +27,16 @@
     <h2>Arc AI Transaction Hub (Testnet)</h2>
     
     <div class="card">
-        <h3>1. Hubungkan Dompet Web3</h3>
-        <button id="connectBtn" onclick="connectWallet()">Connect Wallet</button>
+        <h3>1. Manajemen Dompet Web3</h3>
+        <button id="mainWalletBtn" onclick="toggleWalletOptions()">Pilih & Hubungkan Dompet</button>
+        
+        <div id="walletOptions" class="wallet-options">
+            <button class="btn-wallet" onclick="selectWallet('metamask')"><span>🦊 MetaMask</span> <span>Hubungkan</span></button>
+            <button class="btn-wallet" onclick="selectWallet('rabby')"><span>💳 Rabby Wallet</span> <span>Hubungkan</span></button>
+            <button class="btn-wallet" onclick="selectWallet('trust')"><span>🛡️ Trust Wallet</span> <span>Hubungkan</span></button>
+            <button class="btn-wallet" onclick="selectWallet('generic')"><span>🌐 Browser Default Wallet</span> <span>Hubungkan</span></button>
+        </div>
+
         <p id="walletAddress" style="margin-top:10px; color:#8b949e;">Status: Wallet belum terhubung.</p>
     </div>
 
@@ -41,30 +54,72 @@
 </div>
 
 <script>
-    let provider, walletAddress, activeProvider;
+    let walletAddress = null;
+    let activeProvider = null;
     const USDC_ADDRESS = "0x2a98059bf98925208f23fd62fea17c2d3dcc6187";
 
-    async function connectWallet() {
-        activeProvider = window.ethereum || (window.web3 && window.web3.currentProvider);
-        
-        if (!activeProvider) {
-            updateLog("Error: Dompet Web3 tidak terdeteksi!");
+    function toggleWalletOptions() {
+        if (walletAddress) {
+            disconnectWallet();
+        } else {
+            document.getElementById("walletOptions").classList.toggle("show");
+        }
+    }
+
+    async function selectWallet(walletType) {
+        document.getElementById("walletOptions").classList.remove("show");
+        let providerInstance = null;
+
+        if (walletType === 'metamask' && window.ethereum?.isMetaMask) {
+            providerInstance = window.ethereum;
+        } else if (walletType === 'rabby' && window.ethereum?.isRabby) {
+            providerInstance = window.ethereum;
+        } else if (walletType === 'trust' && window.ethereum?.isTrust) {
+            providerInstance = window.ethereum;
+        } else {
+            providerInstance = window.ethereum || (window.web3 && window.web3.currentProvider);
+        }
+
+        if (!providerInstance) {
+            updateLog(`Error: Dompet pilihan Anda (${walletType}) tidak terdeteksi aktif di browser ini!`);
             return;
         }
+
+        activeProvider = providerInstance;
+        await connectWallet();
+    }
+
+    async function connectWallet() {
         try {
-            updateLog("Menghubungkan ke dompet aktif Anda...");
-            provider = new ethers.BrowserProvider(activeProvider);
-            
+            updateLog("Meminta konfirmasi akses dari dompet pilihan Anda...");
             const accounts = await activeProvider.request({ method: 'eth_requestAccounts' });
             walletAddress = accounts[0];
             
             document.getElementById("walletAddress").innerText = "Terhubung: " + walletAddress;
             document.getElementById("processBtn").disabled = false;
-            document.getElementById("connectBtn").innerText = "Wallet Connected";
-            updateLog("Dompet sukses terhubung! AI Agent siap menerima perintah.");
+            
+            const mainBtn = document.getElementById("mainWalletBtn");
+            mainBtn.innerText = "Disconnect Wallet";
+            mainBtn.className = "btn-danger";
+            
+            updateLog("Dompet sukses terhubung! AI Agent siap menerima perintah transaksi.");
         } catch (err) {
             updateLog("Koneksi gagal: " + err.message);
         }
+    }
+
+    function disconnectWallet() {
+        walletAddress = null;
+        activeProvider = null;
+        
+        document.getElementById("walletAddress").innerText = "Status: Wallet terputus.";
+        document.getElementById("processBtn").disabled = true;
+        
+        const mainBtn = document.getElementById("mainWalletBtn");
+        mainBtn.innerText = "Pilih & Hubungkan Dompet";
+        mainBtn.className = "";
+        
+        updateLog("Dompet berhasil diputuskan dari dApp.");
     }
 
     function updateLog(msg) {
@@ -102,30 +157,31 @@
 
     async function executeTransferUSDC(to, amount) {
         try {
-            updateLog("Menyusun kode transaksi transfer USDC...");
-            
+            updateLog("Menyusun kode enkripsi pengiriman data...");
             const parsedAmount = ethers.parseUnits(amount, 6);
             
             const abiCoder = ethers.AbiCoder.defaultAbiCoder();
-            const transferSignature = "0xa9059cbb";
-            
+            const transferSignature = "0xa9059cbb"; 
             const paddedAddress = abiCoder.encode(["address"], [to]).slice(2);
             const paddedAmount = abiCoder.encode(["uint256"], [parsedAmount]).slice(2);
-            
             const transactionData = transferSignature + paddedAddress + paddedAmount;
 
-            updateLog("Memanggil dompet secara langsung... Silakan lihat pop-up dompet Anda.");
+            // Mengambil chainId aktif saat ini untuk disematkan dalam transaksi mentah (Solusi anti-eror 500)
+            const currentChainId = await activeProvider.request({ method: 'eth_chainId' });
+
+            updateLog("Memanggil dompet secara langsung... Silakan buka jendela konfirmasi dompet.");
             
             const txHash = await activeProvider.request({
                 method: 'eth_sendTransaction',
                 params: [{
                     from: walletAddress,
                     to: USDC_ADDRESS,
-                    data: transactionData
+                    data: transactionData,
+                    chainId: currentChainId // Ditambahkan secara eksplisit agar Rabby mengenali jaringan target tanpa crash
                 }],
             });
 
-            updateLog(`Transaksi berhasil dikirim oleh dompet! Hash: ${txHash}`);
+            updateLog(`Transaksi sukses dikirim! Hash: ${txHash}`);
         } catch (err) {
             updateLog("Transaksi Gagal: " + (err.data?.message || err.message));
         }
